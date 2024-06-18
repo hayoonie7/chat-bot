@@ -1,8 +1,11 @@
 import discord
 import responses
-import keys
+import os
+from dotenv import load_dotenv, dotenv_values
 
-token = keys.token
+load_dotenv()
+token = os.getenv('token')
+print(f'Token: {token}')
 
 async def send_message(message, user_message):
     try:

@@ -1,7 +1,9 @@
 import requests
-import keys 
+import os
+from dotenv import load_dotenv, dotenv_values
 
-api_key = keys.api_key
+load_dotenv()
+api_key = os.getenv('api_key')
 
 def get_summoner(name, tagline): 
     api_url = f"https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{name}/{tagline}?api_key={api_key}"
