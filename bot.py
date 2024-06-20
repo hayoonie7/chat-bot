@@ -1,20 +1,17 @@
 import discord
 from discord import app_commands
+import pymongo.errors
 import responses
+import asyncio
+import signal
 import os
 import league
 import mysql.connector
+import pymongo
+from pymongo import MongoClient
 
 from dotenv import load_dotenv, dotenv_values
 
-load_dotenv()
-token = os.getenv('token')
-server_id = os.getenv('server_id')
-user = os.getenv('user')
-host = os.getenv('host')
-database = os.getenv('database')
-password = os.getenv('password')
-print(f'Token: {token}')
 
 class GitGudBot(discord.Client):
     def __init__(self):
@@ -22,7 +19,20 @@ class GitGudBot(discord.Client):
         intents.guilds = True  # Ensure the guilds intent is enabled
         intents.messages = True  # Ensure the messages intent is enabled
         super().__init__(intents=intents)
+        load_dotenv()
+        self.token = os.getenv('token')
+        self.connection_string = os.getenv('connection_string')
+        self.server_id = os.getenv('server_id')
+        self.sql_user = os.getenv('user')
+        self.host = os.getenv('host')
+        self.database = os.getenv('database')
+        self.password = os.getenv('password')
+        print(f'Token: {self.token}')
         self.synced = False
+        self.cnx = None
+        self.database = None
+        self.collection = None
+
         
     async def send_message(self, message, user_message):
         try:
@@ -46,11 +56,14 @@ class GitGudBot(discord.Client):
 
 
     async def on_ready(self):
-        print(f'Bot {self.user} is ready!')
+        print(f'Bot {self.user} is ready! with id: {self.user.id}')
         await self.wait_until_ready()
-        await self.connect_database()
+        # await self.connect_database()
+        discord_database = await self.get_database()
+        self.database = discord_database
+        self.collection = discord_database['Users']
         if not self.synced:
-            await command_tree.sync(guild = discord.Object(id=server_id))
+            await command_tree.sync(guild = discord.Object(id=self.server_id))
             self.synced = True
     
     async def on_guild_join(self, guild):
@@ -70,28 +83,60 @@ class GitGudBot(discord.Client):
     
     async def connect_database(self):
         try:
-            cnx = mysql.connector.connect(user=user, password=password,
-                              host=host,
-                              database=database, port=3306)
-            if cnx.is_connected():
-                db_Info = cnx.get_server_info()
+            self.cnx = mysql.connector.connect(user=self.sql_user, password=self.password,
+                              host=self.host,
+                              database=self.database, port=3306)
+            if self.cnx.is_connected():
+                db_Info = self.cnx.get_server_info()
                 print("Connected to MySQL Server version ", db_Info)
         except mysql.connector.Error as err:
-            if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
-                print("Something is wrong with your user name or password")
-            elif err.errno == errorcode.ER_BAD_DB_ERROR:
-                print("Database does not exist")
-            else:
                 print(err)
+
+    async def get_database(self):
+        print('Connecting to MongoDB...')
+        try:
+            database_client = MongoClient(self.connection_string)
+            db = database_client.list_database_names()
+            print('Connected to MongoDB!')
+            return database_client['DiscordBot']
             
-        cnx.close()
+        except pymongo.errors.ConnectionFailure as e:
+            print("Could not connect to MongoDB: %s" % e)
+        except pymongo.errors.OperationFailure as e:
+            print("Authentication failed: %s" % e)
+        
+        # return database_client['']
+    
+    async def add_user(self, user):
+        try:
+            print('Adding user...')
+            if self.collection.find_one(user):
+                print('User already exists!')
+                return
+            self.collection.insert_one(user)
+            print('User added!')
+        except Exception as e:
+            print(e)
+
+    async def on_disconnect(self):
+        if self.cnx and self.cnx.is_connected():
+            self.cnx.close()
+            print('Database connection closed.')
+        print('Bot has disconnected.')
+
+    async def on_close(self):
+        if self.cnx and self.cnx.is_connected():
+            self.cnx.close()
+            print('Database connection closed.')
+        print('Bot connection is closing.')
 
 
 
 discord_bot = GitGudBot()        
 command_tree = app_commands.CommandTree(discord_bot)
 
-@command_tree.command(name='riot', description='Enter your Riot ID (Name and Tagline)', guild = discord.Object(id=server_id))
+
+@command_tree.command(name='riot', description='Enter your Riot ID (Name and Tagline)', guild = discord.Object(id=discord_bot.server_id))
 async def riot_id(interaction: discord.Interaction, name: str): 
     riot_name = name.split("#")[0]
     tagline = name.split("#")[1]
@@ -100,6 +145,30 @@ async def riot_id(interaction: discord.Interaction, name: str):
     try:
         sum_info = league.get_summoner(riot_name, tagline)
         await interaction.response.send_message(f'Your Riot name is {riot_name} and your tagline is {tagline}!', ephemeral=True)
+        user = interaction.user
+        user_to_add = {
+                'user_id': user.id,
+                'name': user.name,
+                'puuid': sum_info['puuid'],
+                'riot_id': name
+        }
+        print(user_to_add)
+        await discord_bot.add_user(user_to_add)
     except Exception as e:
         await interaction.response.send_message(f'Sorry, I could not find your Riot info. Please try again.', ephemeral=True) 
 
+@command_tree.command(name='info', description='Display your riot info', guild = discord.Object(id=discord_bot.server_id))
+async def get_riot_id(interaction: discord.Interaction):
+    try:
+        user_id = interaction.user.id
+        user_document = discord_bot.collection.find_one({'user_id': user_id})
+        if not user_document:
+            await interaction.response.send_message(f'You have not entered your Riot ID yet!', ephemeral=True)
+            return
+        riot_id = user_document['riot_id']
+        riot_name = riot_id.split("#")[0]
+        tagline = riot_id.split("#")[1]
+        puuid = user_document['puuid']
+        await interaction.response.send_message(f'Your Riot name is {riot_name}.\nYour tagline is {tagline}\nAnd your puuid is {puuid}.', ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f'Sorry, I could not find your Riot info. Please try again.', ephemeral=True)  

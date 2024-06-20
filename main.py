@@ -1,5 +1,6 @@
 from bot import discord_bot
 import os
+import signal
 from dotenv import load_dotenv, dotenv_values
 
 load_dotenv()
