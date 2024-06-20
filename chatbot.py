@@ -1,15 +1,16 @@
 from chatterbot import ChatBot
 from chatterbot.trainers import ListTrainer
+from chatterbot.conversation import Statement
 
-chatbot = ChatBot("LeagueBot")
+chatbot = ChatBot("TalkLeauge")
 
 trainer = ListTrainer(chatbot)
 trainer.train([
-    "Hi",
-    "Welcome, friend 🤗",
+    "Good job!",
+    "Nice try",
 ])
 trainer.train([
-    "Are you a plant?",
+    "GG EZ gitgud",
     "No, I'm the pot below the plant!",
 ])
 
