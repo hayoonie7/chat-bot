@@ -12,6 +12,7 @@ def get_summoner(name, tagline):
     resp = requests.get(api_url)
     #return resp.json()
     info = resp.json()
+    print(info)
     return info
     #print(info)
 
@@ -43,12 +44,28 @@ def get_matches(puuid, startTime=None, endTime=None, queue=None, type=None, star
     api_url = f"https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?{start_time_string}{end_string}{queue_string}{type_string}{start_string}{count_string}"
     api_url = api_url + 'api_key=' + api_key
 
-    print(api_url)
-    #resp = requests.get(api_url)
-    #info = resp.json()
+    resp = requests.get(api_url)
+    info = resp.json()
+    print(info)
+    return info
+
+def get_match(match_id, puuid):
+    api_url = f"https://americas.api.riotgames.com/lol/match/v5/matches/{match_id}?api_key={api_key}"
+    resp = requests.get(api_url)
+    match_stats = resp.json()
+    participants = match_stats['metadata']['participants']
+    player_index = participants.index(puuid)
+    print(match_stats['info']['participants'][player_index]['summonerName'])
+    player_index = participants.index(puuid)
+    player_data = match_stats['info']['participants'][player_index]
+    champ = player_data['championName']
+    k = player_data['kills']
+    d = player_data['deaths']
+    a = player_data['assists']
+    win = player_data['win']
+    print("Champ:", champ, "Kills:", k, "Deaths:", d, "Assists:", a, "Win:", win)
 
 
-    #print(info)
 
 
 name = "hayoonie"

@@ -137,9 +137,10 @@ command_tree = app_commands.CommandTree(discord_bot)
 
 
 @command_tree.command(name='riot', description='Enter your Riot ID (Name and Tagline)', guild = discord.Object(id=discord_bot.server_id))
-async def riot_id(interaction: discord.Interaction, name: str): 
-    riot_name = name.split("#")[0]
-    tagline = name.split("#")[1]
+async def riot_id(interaction: discord.Interaction, name: str):
+    split_name = name.split("#") 
+    riot_name = split_name[0]
+    tagline = split_name[1]
     print(name)
     print(f'Name: {riot_name}, Tagline: {tagline}')
     try:
@@ -169,6 +170,9 @@ async def get_riot_id(interaction: discord.Interaction):
         riot_name = riot_id.split("#")[0]
         tagline = riot_id.split("#")[1]
         puuid = user_document['puuid']
+        player_matches = league.get_matches(puuid)
+        for i in range(len(player_matches)):
+            player_stats = league.get_match(player_matches[i], puuid)
         await interaction.response.send_message(f'Your Riot name is {riot_name}.\nYour tagline is {tagline}\nAnd your puuid is {puuid}.', ephemeral=True)
     except Exception as e:
         await interaction.response.send_message(f'Sorry, I could not find your Riot info. Please try again.', ephemeral=True)  
